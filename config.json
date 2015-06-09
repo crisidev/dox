@@ -1,0 +1,6 @@
+{
+    "InfluxHost": "localhost:8086",
+    "InfluxDb": "docker",
+    "InfluxUser": "root",
+    "InfluxPass": "root",
+}
