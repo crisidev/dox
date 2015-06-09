@@ -34,13 +34,13 @@ func main() {
 func readDoxConfig(path string) DoxConfig {
 	confFile, err := os.Open(path)
 	if err != nil {
-		log.Fatalln("error:", err)
+		log.Fatalln("error opening config file:", err)
 	}
 	confDecoder := json.NewDecoder(confFile)
 	config := DoxConfig{}
 	err = confDecoder.Decode(&config)
 	if err != nil {
-		log.Fatalln("error:", err)
+		log.Fatalln("error decoding json config", err)
 	}
 	return config
 }
