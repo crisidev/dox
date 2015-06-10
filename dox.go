@@ -4,10 +4,14 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/fsouza/go-dockerclient"
 	"github.com/influxdb/influxdb/client"
+	"io/ioutil"
 	"log"
 	"os"
-	//"time"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type DoxConfig struct {
@@ -21,13 +25,24 @@ var config = readDoxConfig("config.json")
 
 func main() {
 	log.Println("starting dox-agent")
-	//	conn := influxDBConnect()
-	getCpuStats("/sys/fs/cgroup/memory/system.slice/docker-4af72814ca8df14cb4aa010b3d64382a12465c445a4eab9bec7278af9b0b3ff2.scope/memory.stat")
-	//for {
-	//time.Sleep(time.Second)
-	//log.Println("push")
-	//InfluxDBWritePoints(conn)
-	//}
+	conn := influxDBConnect()
+	endpoint := "unix:///var/run/docker.sock"
+	client, _ := docker.NewClient(endpoint)
+	containers, _ := client.ListContainers(docker.ListContainersOptions{All: false})
+	for {
+		for _, container := range containers {
+			log.Println("push")
+			col1, val1 := getMemoryStats(container.ID)
+			col2, val2 := getCpuStats(container.ID)
+			col := append(col1, col2...)
+			val := append(val1, val2...)
+			col = append(col, "container_name")
+			val = append(val, container.Names[0])
+			InfluxDBWritePoints(conn, col, val)
+			time.Sleep(time.Second)
+
+		}
+	}
 }
 
 // Read config from json file
@@ -65,47 +80,70 @@ func influxDBConnect() *client.Client {
 	return conn
 }
 
-func InfluxDBWritePoints(conn *client.Client) {
+func InfluxDBWritePoints(conn *client.Client, columns []string, values []interface{}) {
 	series := &client.Series{
 		Name:    "docker_stats",
-		Columns: []string{"value", "value2", "name"},
+		Columns: columns,
 		Points: [][]interface{}{
-			{1.0, 1.3, "pippo"},
+			values,
 		},
 	}
 	err := conn.WriteSeries([]*client.Series{series})
 	if err != nil {
-		log.Fatalln("error:", err)
+		log.Fatalln("error sending serie to influxdb:", err)
 	}
 }
 
 // Docker helpers
-func Readln(reader *bufio.Reader) (string, error) {
-	var (
-		isPrefix bool  = true
-		err      error = nil
-		line, ln []byte
-	)
-	for isPrefix && err == nil {
-		line, isPrefix, err = reader.ReadLine()
-		ln = append(ln, line...)
-	}
-	return string(ln), err
-}
-
-func readStatFile(path string) {
-	file, err := os.Open(path)
+func getCpuStats(id string) ([]string, []interface{}) {
+	cgroup := "/sys/fs/cgroup/cpu,cpuacct/system.slice/"
+	statfile := "cpuacct.usage"
+	columns := []string{"cpu_usage_total"}
+	path := fmt.Sprintf("%s/docker-%s.scope/%s", cgroup, id, statfile)
+	cputotal, err := ioutil.ReadFile(path)
 	if err != nil {
-		log.Fatalln("error:", err)
+		log.Fatalln("error opening cpu stat file %s: %s", path, err)
 	}
-	reader := bufio.NewReader(file)
-	str, e := Readln(reader)
-	for e == nil {
-		fmt.Println(str)
-		str, e = Readln(reader)
+	partials := []string{strings.Trim(string(cputotal), "\n")}
+	statfile = "cpuacct.usage_percpu"
+	path = fmt.Sprintf("%s/docker-%s.scope/%s", cgroup, id, statfile)
+	cpupartial, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Printf("error opening cpu stat file: %s", err)
 	}
+	partials = append(partials, strings.Fields(string(cpupartial))...)
+	lenght := len(partials) + 1
+	values := make([]interface{}, lenght)
+	for i, v := range partials {
+		intval, _ := strconv.Atoi(v)
+		values[i] = intval
+		columns = append(columns, fmt.Sprintf("cpu_usage_%d", i))
+	}
+	return columns, values
+
 }
 
-func getCpuStats(id string) {
-	readStatFile(id)
+func getMemoryStats(id string) ([]string, []interface{}) {
+	cgroup := "/sys/fs/cgroup/memory/system.slice"
+	memory := "memory.stat"
+	path := fmt.Sprintf("%s/docker-%s.scope/%s", cgroup, id, memory)
+	fd, err := os.Open(path)
+	if err != nil {
+		log.Printf("error opening cpu stat file: %s", err)
+	}
+	defer fd.Close()
+	scanner := bufio.NewScanner(fd)
+	scanner.Split(bufio.ScanLines)
+	columns, tmp_values := []string{}, []string{}
+	for scanner.Scan() {
+		split := strings.Fields(scanner.Text())
+		columns = append(columns, split[0])
+		tmp_values = append(tmp_values, split[1])
+	}
+	values := make([]interface{}, len(tmp_values))
+	for i, v := range tmp_values {
+		values[i], _ = strconv.Atoi(v)
+	}
+
+	return columns, values
 }
