@@ -164,7 +164,7 @@ func SendContainersStats(influxClient *influx.Client, containers []docker.APICon
 		containerName := StripChars(container.Names[0], "/")
 		go SendCpuStats(influxClient, container.ID, containerName)
 		go SendMemoryStats(influxClient, container.ID, containerName)
-		//	go SendIOStats(influxClient, container.ID, containerName)
+		go SendIOStats(influxClient, container.ID, containerName)
 	}
 }
 
@@ -274,7 +274,7 @@ func IOStatToPoint(metric string, point DoxPoint) DoxPoint {
 	partials := strings.Split(metric, "\n")
 	partials = partials[:len(partials)-1]
 	values := []*big.Int{}
-	for i, v := range partials {
+	for _, v := range partials {
 		var (
 			column string
 			value  string
@@ -282,24 +282,25 @@ func IOStatToPoint(metric string, point DoxPoint) DoxPoint {
 		split := strings.Fields(v)
 
 		if len(split) == 3 {
-			column = fmt.Sprintf("%s-%s", split[0], split[1])
+			column = split[1]
 			value = split[2]
 		} else if len(split) == 2 {
 			column = split[0]
-			value = split[1]
+			value = "0"
 		}
 		index := sliceIndex(point.Columns, column)
+
 		if index == -1 {
 			point.Columns = append(point.Columns, column)
 			values = append(values, StringToBigint(value))
 		} else {
 			values[index] = big.NewInt(0).Add(values[index], StringToBigint(value))
-			point.Values[i] = StringToBigint(value)
 		}
 
 	}
-	//	point.Values = make([]interface{}, 5)
-	//  for i, v := range values {
-
+	point.Values = make([]interface{}, 5)
+	for i, v := range values {
+		point.Values[i] = v
+	}
 	return point
 }
