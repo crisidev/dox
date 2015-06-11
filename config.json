@@ -1,6 +1,22 @@
 {
     "InfluxHost": "localhost:8086",
-    "InfluxDb": "docker",
+    "InfluxDb": "docker_metrics",
     "InfluxUser": "root",
-    "InfluxPass": "root"
+    "InfluxPass": "root",
+    "DockerHost": "unix:///var/run/docker.sock",
+    "DockerStatConfig": {
+      "cpu": {
+        "StatPath": "/sys/fs/cgroup/cpu,cpuacct/system.slice",
+        "StatFile0": "cpuacct.usage_percpu"
+      },
+      "mem": {
+        "StatPath": "/sys/fs/cgroup/memory/system.slice",
+        "StatFile0": "memory.stat"
+      },
+      "disk": {
+        "StatPath": "/sys/fs/cgroup/blkio/system.slice",
+        "StatFile0": "blkio.throttle.io_service_bytes",
+        "StatFile1": "blkio.throttle.io_serviced"
+      }
+    }
 }
