@@ -19,7 +19,7 @@ import (
 
 const (
 	APP_NAME    = "dox"
-	APP_VERSION = "0.1"
+	APP_VERSION = "1.0"
 	APP_AUTHOR  = "bigo@crisidev.org"
 	APP_SITE    = "https://github.com/crisidev/dox"
 )
