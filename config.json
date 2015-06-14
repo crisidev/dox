@@ -1,7 +1,18 @@
 {
-    "InfluxHost": "influxdb:8087",
+    "InfluxHost": "influxdb:8086",
     "InfluxDb": "docker_metrics",
     "InfluxUser": "root",
     "InfluxPass": "root",
-    "DockerHost": "unix:///var/run/docker.sock"
+    "DockerHost": "unix:///var/run/docker.sock",
+    "DoxMetrics": [
+      "cpu", "mem", "net",
+      "dsk.io_service_bytes_recursive",
+      "dsk.io_serviced_recursive",
+      "dsk.io_queue_recursive",
+      "dsk.io_service_time_recursive",
+      "dsk.io_wait_time_recursive",
+      "dsk.io_merged_recursive",
+      "dsk.io_time_recursive",
+      "dsk.sectors_recursive"
+    ]
 }

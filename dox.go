@@ -4,14 +4,15 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/fsouza/go-dockerclient"
-	//influx "github.com/influxdb/influxdb/client"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/fsouza/go-dockerclient"
 )
 
 const (
@@ -26,10 +27,11 @@ var (
 	daemonFlag         bool
 	daemonIntervalFlag time.Duration
 	pidFile            string
-	config             *DoxConfig
-	doxContainers      DoxContainers
 	doxWg              sync.WaitGroup
-	routineNum         int
+	routineNum         = 0
+	influxWriteChan    = make(chan string)
+	doxContainers      = make(DoxContainers)
+	config             = readDoxConfig("config.json")
 )
 
 type DoxConfig struct {
@@ -38,19 +40,17 @@ type DoxConfig struct {
 	InfluxUser string
 	InfluxPass string
 	DockerHost string
+	DoxMetrics []string
 }
 
 type DoxContainer struct {
-	c         chan *docker.Stats
+	statChan  chan *docker.Stats
 	container docker.APIContainers
 }
 type DoxContainers map[string]*DoxContainer
 
 // Init functions
 func init() {
-	routineNum = 0
-	config = readDoxConfig("config.json")
-	doxContainers = make(DoxContainers)
 	flag.BoolVar(&versionFlag, "version", false, "Print the version number and exit.")
 	flag.BoolVar(&versionFlag, "V", false, "Print the version number and exit (shorthand)")
 
@@ -107,12 +107,21 @@ func sliceContains(slice []string, element string) bool {
 	return false
 }
 
+func stripChars(str, delimiter string) string {
+	return strings.Map(func(r rune) rune {
+		if strings.IndexRune(delimiter, r) < 0 {
+			return r
+		}
+		return -1
+	}, str)
+}
+
 //Signal handling
-func routineDown() {
+func routinesDown() {
 	copyRoutineNum := routineNum
 	for i := 0; i < copyRoutineNum; i++ {
-		log.Printf("routines stopped, %d to go", routineNum)
 		routineNum -= 1
+		log.Printf("routine stopped, %d to go", routineNum)
 		doxWg.Done()
 	}
 }
@@ -128,8 +137,8 @@ func handleSignals() {
 	routineUp()
 	go func() {
 		_ = <-c
-		log.Printf("tearing down %d goroutines. this could take a while...", routineNum)
-		routineDown()
+		log.Printf("tearing down %d goroutines, this could take a while...", routineNum)
+		routinesDown()
 	}()
 }
 
@@ -137,9 +146,8 @@ func main() {
 	flag.Parse()
 	printDoxInfo()
 	handleSignals()
-	runDockerStatCollector()
-	runInfluxStatPusher()
-
+	influxClient := getInfluxDBClient()
+	runDockerStatCollector(influxClient)
 	doxWg.Wait()
 	os.Exit(0)
 }

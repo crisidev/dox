@@ -1,9 +1,11 @@
 package main
 
 import (
-	"github.com/fsouza/go-dockerclient"
 	"log"
 	"time"
+
+	"github.com/fsouza/go-dockerclient"
+	influx "github.com/influxdb/influxdb/client"
 )
 
 func isContainerInAPIContainers(slice []docker.APIContainers, id string) bool {
@@ -15,57 +17,55 @@ func isContainerInAPIContainers(slice []docker.APIContainers, id string) bool {
 	return false
 }
 
+func removeDoxContainer(id string) {
+	log.Printf("stopped dockerStatPoller and influxStatPusher for container %s", id)
+	delete(doxContainers, id)
+}
+
 func cleanupDoxContainer(containers []docker.APIContainers) {
 	for id, _ := range doxContainers {
 		if isContainerInAPIContainers(containers, id) == false {
-			log.Printf("container %s shut down removed from monitoring", id)
-			delete(doxContainers, id)
+			removeDoxContainer(id)
 		}
 	}
 }
 
-func pullDoxContainers(dockerClient *docker.Client, containers []docker.APIContainers) {
+func pullDoxContainers(dockerClient *docker.Client, containers []docker.APIContainers, influxClient *influx.Client) {
 	for _, container := range containers {
 		if doxContainers[container.ID] == nil {
 			doxContainers[container.ID] = &DoxContainer{
 				container: container,
-				c:         make(chan *docker.Stats),
+				statChan:  make(chan *docker.Stats),
 			}
 			log.Println("starting dockerStatPoller for container", container.ID)
 			go dockerClient.Stats(docker.StatsOptions{
 				ID:    container.ID,
-				Stats: doxContainers[container.ID].c,
+				Stats: doxContainers[container.ID].statChan,
 			})
+			routineUp()
+			go runInfluxStatPusher(doxContainers[container.ID], influxClient)
 		}
 	}
 }
 
-func updateDoxContainers(dockerClient *docker.Client, routine bool) {
-	firstRun := true
-	for firstRun || routine {
-		firstRun = false
-		if routine == true {
-			time.Sleep(time.Second * 5)
-		}
+func updateDoxContainers(dockerClient *docker.Client, influxClient *influx.Client) {
+	for daemonFlag {
 		containers, err := dockerClient.ListContainers(docker.ListContainersOptions{All: false})
 		if err != nil {
 			log.Fatalln("error reading container list:", err)
 		}
-		// Add new containers and channels
-		pullDoxContainers(dockerClient, containers)
-		//log.Printf("updated DoxContainers struct. found %d running containers", len(containers))
-		// Cleanup of old containers
+		pullDoxContainers(dockerClient, containers, influxClient)
 		cleanupDoxContainer(containers)
+		time.Sleep(time.Second * 10)
 	}
 }
 
-func runDockerStatCollector() {
+func runDockerStatCollector(influxClient *influx.Client) {
 	log.Println("attaching dockerClient to", config.DockerHost)
 	dockerClient, err := docker.NewClient(config.DockerHost)
 	if err != nil {
 		log.Fatalln("error creating docker client client:", err)
 	}
-	updateDoxContainers(dockerClient, false)
 	routineUp()
-	go updateDoxContainers(dockerClient, true)
+	go updateDoxContainers(dockerClient, influxClient)
 }
