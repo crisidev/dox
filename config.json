@@ -4,15 +4,13 @@
     "InfluxUser": "root",
     "InfluxPass": "root",
     "DockerHost": "unix:///var/run/docker.sock",
-    "DoxMetrics": [
+    "DataRetentionMinutes": 60,
+    "DockerMetrics": [
       "cpu", "mem", "net",
-      "dsk.io_service_bytes_recursive",
-      "dsk.io_serviced_recursive",
-      "dsk.io_queue_recursive",
-      "dsk.io_service_time_recursive",
-      "dsk.io_wait_time_recursive",
-      "dsk.io_merged_recursive",
-      "dsk.io_time_recursive",
-      "dsk.sectors_recursive"
-    ]
+      "dsk.io_service_bytes",
+      "dsk.io_serviced"
+    ],
+    "DockerPath": {
+      "IOStatPath": "/rootfs/sys/fs/cgroup/blkio/system.slice"
+    }
 }

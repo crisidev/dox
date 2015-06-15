@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/fsouza/go-dockerclient"
 )
@@ -23,24 +22,25 @@ const (
 )
 
 var (
-	versionFlag        bool
-	daemonFlag         bool
-	daemonIntervalFlag time.Duration
-	pidFile            string
-	doxWg              sync.WaitGroup
-	routineNum         = 0
-	influxWriteChan    = make(chan string)
-	doxContainers      = make(DoxContainers)
-	config             = readDoxConfig("config.json")
+	versionFlag     bool
+	pidFile         string
+	logFile         string
+	doxWg           sync.WaitGroup
+	routineNum      = 0
+	influxWriteChan = make(chan string)
+	doxContainers   = make(DoxContainers)
+	config          = readDoxConfig("config.json")
 )
 
 type DoxConfig struct {
-	InfluxHost string
-	InfluxDb   string
-	InfluxUser string
-	InfluxPass string
-	DockerHost string
-	DoxMetrics []string
+	InfluxHost           string
+	InfluxDb             string
+	InfluxUser           string
+	InfluxPass           string
+	DataRetentionMinutes int
+	DockerHost           string
+	DockerMetrics        []string
+	DockerPath           map[string]string
 }
 
 type DoxContainer struct {
@@ -54,14 +54,11 @@ func init() {
 	flag.BoolVar(&versionFlag, "version", false, "Print the version number and exit.")
 	flag.BoolVar(&versionFlag, "V", false, "Print the version number and exit (shorthand)")
 
-	flag.BoolVar(&daemonFlag, "daemon", false, "Run in daemon mode.")
-	flag.BoolVar(&daemonFlag, "D", false, "Run in daemon mode (shorthand)")
-
-	flag.DurationVar(&daemonIntervalFlag, "interval", time.Second, "Interval between checks in milliseconds in daemon mode.")
-	flag.DurationVar(&daemonIntervalFlag, "i", time.Second, "Interval between checks in milliseconds in daemon mode (shorthand).")
-
 	flag.StringVar(&pidFile, "pidfile", "./dox.pid", "Path of the pid file in daemon mode.")
-	flag.StringVar(&pidFile, "P", "./dox.pid", "Path of the pid file in daemon mode (shorthand).")
+	flag.StringVar(&pidFile, "p", "./dox.pid", "Path of the pid file in daemon mode (shorthand).")
+
+	flag.StringVar(&logFile, "logfile", "./dox.log", "Path of the log file in daemon mode.")
+	flag.StringVar(&logFile, "l", "./dox.log", "Path of the log file in daemon mode (shorthand).")
 }
 
 // Read config from json file
@@ -84,16 +81,6 @@ func p(s interface{}) {
 	fmt.Println(s)
 }
 
-func pc(c DoxContainers) {
-	i := 0
-	for _, v := range c {
-		fmt.Println("--------------------------------")
-		fmt.Println(v.container.Names[0])
-		i += 1
-	}
-	fmt.Println(i)
-}
-
 func printDoxInfo() {
 	fmt.Printf("%s v%s, docker: %s, influxdb: %s\n", APP_NAME, APP_VERSION, config.DockerHost, config.InfluxHost)
 }
@@ -105,6 +92,23 @@ func sliceContains(slice []string, element string) bool {
 		}
 	}
 	return false
+}
+
+func setupLogging() {
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalln("error opening the log file", err)
+	}
+	log.SetOutput(file)
+}
+
+func sliceIndex(slice []string, element string) int {
+	for i, v := range slice {
+		if v == element {
+			return i
+		}
+	}
+	return -1
 }
 
 func stripChars(str, delimiter string) string {
@@ -120,10 +124,14 @@ func stripChars(str, delimiter string) string {
 func routinesDown() {
 	copyRoutineNum := routineNum
 	for i := 0; i < copyRoutineNum; i++ {
-		routineNum -= 1
-		log.Printf("routine stopped, %d to go", routineNum)
-		doxWg.Done()
+		routineDown()
 	}
+}
+
+func routineDown() {
+	routineNum -= 1
+	doxWg.Done()
+	log.Printf("routine stopped, %d to go", routineNum)
 }
 
 func routineUp() {
@@ -138,16 +146,18 @@ func handleSignals() {
 	go func() {
 		_ = <-c
 		log.Printf("tearing down %d goroutines, this could take a while...", routineNum)
-		routinesDown()
+		routineDown()
 	}()
 }
 
 func main() {
 	flag.Parse()
+	setupLogging()
 	printDoxInfo()
 	handleSignals()
 	influxClient := getInfluxDBClient()
 	runDockerStatCollector(influxClient)
 	doxWg.Wait()
+	log.Printf("%s stopped", APP_NAME)
 	os.Exit(0)
 }

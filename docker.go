@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/fsouza/go-dockerclient"
@@ -22,9 +25,11 @@ func removeDoxContainer(id string) {
 	delete(doxContainers, id)
 }
 
-func cleanupDoxContainer(containers []docker.APIContainers) {
+func cleanupDoxContainer(containers []docker.APIContainers, influxClient *influx.Client) {
 	for id, _ := range doxContainers {
 		if isContainerInAPIContainers(containers, id) == false {
+			log.Printf("stopping monitoring for container %s, corresponding series will be deleted in 60 minutes", id)
+			go dropContainerSeries(influxClient, stripChars(doxContainers[id].container.Names[0], "/"))
 			removeDoxContainer(id)
 		}
 	}
@@ -42,20 +47,19 @@ func pullDoxContainers(dockerClient *docker.Client, containers []docker.APIConta
 				ID:    container.ID,
 				Stats: doxContainers[container.ID].statChan,
 			})
-			routineUp()
 			go runInfluxStatPusher(doxContainers[container.ID], influxClient)
 		}
 	}
 }
 
 func updateDoxContainers(dockerClient *docker.Client, influxClient *influx.Client) {
-	for daemonFlag {
+	for {
 		containers, err := dockerClient.ListContainers(docker.ListContainersOptions{All: false})
 		if err != nil {
 			log.Fatalln("error reading container list:", err)
 		}
 		pullDoxContainers(dockerClient, containers, influxClient)
-		cleanupDoxContainer(containers)
+		cleanupDoxContainer(containers, influxClient)
 		time.Sleep(time.Second * 10)
 	}
 }
@@ -66,6 +70,15 @@ func runDockerStatCollector(influxClient *influx.Client) {
 	if err != nil {
 		log.Fatalln("error creating docker client client:", err)
 	}
-	routineUp()
 	go updateDoxContainers(dockerClient, influxClient)
+}
+
+func dockerIOStatFileToSlice(id string, fileName string) []string {
+	cgroupFile := fmt.Sprintf("%s/docker-%s.scope/%s", config.DockerPath["IOStatPath"], id, fileName)
+	stats, err := ioutil.ReadFile(cgroupFile)
+	if err != nil {
+		log.Println("error opening stat file", err)
+	}
+	partials := strings.Split(string(stats), "\n")
+	return partials[:len(partials)-1]
 }
