@@ -13,12 +13,9 @@ func runInfluxStatPusher(doxContainer *DoxContainer, influxClient *influx.Client
 	log.Printf("starting influxStatPusher for container %s", doxContainer.container.ID)
 	for {
 		stat := <-doxContainer.statChan
-		//if doxContainer.container.ID == "b28a083e1f41c26d86adb09aaaea1ae5789b522ed5e7b729eed40911287656a2" {
-		//log.Println(doxContainer.container.Names)
 		for _, metric := range config.DockerMetrics {
 			go pushContainerStat(influxClient, doxContainer, stat, metric)
 		}
-		//}
 	}
 }
 
@@ -38,6 +35,9 @@ func pushContainerStat(influxClient *influx.Client, doxContainer *DoxContainer, 
 	case metric == "dsk.io_serviced":
 		point = dskIOServicedStatsToPoint(point, doxContainer.container.ID)
 	default:
+	}
+	if debugFlag == true {
+		log.Println(point)
 	}
 	go pushContainerPoint(influxClient, point)
 }
@@ -62,15 +62,23 @@ func pushContainerPoint(influxClient *influx.Client, point *influx.Series) {
 }
 
 func pingInfluxDB(influxClient *influx.Client) {
-	for {
+	retryCount := 5
+	for retryCount > 0 {
 		err := influxClient.Ping()
 		if err != nil {
-			log.Println("error ping InfluxDB", err)
-			routinesDown()
+			log.Printf("error ping InfluxDB, retry in one minute, avaliable retries %d", retryCount)
+			log.Println(err)
+			retryCount -= 1
+		} else {
+			if debugFlag == true {
+				log.Println("ping ok, influxClient is alive and pushing")
+			}
+			retryCount = 5
 		}
-		log.Println("ping ok, influxClient is alive")
 		time.Sleep(time.Minute)
 	}
+	routineDown()
+	log.Fatalln("5 errors pinging InfluxDB, exiting")
 }
 
 func getInfluxDBClient() *influx.Client {
@@ -84,6 +92,10 @@ func getInfluxDBClient() *influx.Client {
 	influxClient, err := influx.NewClient(&influxConf)
 	if err != nil {
 		log.Fatalln("error creating influxdb client for container", err)
+	}
+	err = influxClient.Ping()
+	if err != nil {
+		log.Fatalln("error ping InfluxDB, no datatabe to push to", err)
 	}
 	go pingInfluxDB(influxClient)
 	return influxClient

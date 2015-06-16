@@ -36,6 +36,10 @@ func cleanupDoxContainer(containers []docker.APIContainers, influxClient *influx
 }
 
 func pullDoxContainers(dockerClient *docker.Client, containers []docker.APIContainers, influxClient *influx.Client) {
+	if debugFlag == true {
+		log.Printf("running in debug mode, only container %s is monitored", containers[0].ID)
+		containers = []docker.APIContainers{containers[0]}
+	}
 	for _, container := range containers {
 		if doxContainers[container.ID] == nil {
 			doxContainers[container.ID] = &DoxContainer{

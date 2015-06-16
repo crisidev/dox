@@ -23,6 +23,7 @@ const (
 
 var (
 	versionFlag     bool
+	debugFlag       bool
 	pidFile         string
 	logFile         string
 	doxWg           sync.WaitGroup
@@ -59,6 +60,9 @@ func init() {
 
 	flag.StringVar(&logFile, "logfile", "./dox.log", "Path of the log file in daemon mode.")
 	flag.StringVar(&logFile, "l", "./dox.log", "Path of the log file in daemon mode (shorthand).")
+
+	flag.BoolVar(&debugFlag, "debug", false, "Run in debug mode only for fist container.")
+	flag.BoolVar(&debugFlag, "d", false, "Run in debug mode only for fist container (shothand).")
 }
 
 // Read config from json file
@@ -152,7 +156,9 @@ func handleSignals() {
 
 func main() {
 	flag.Parse()
-	setupLogging()
+	if debugFlag == false {
+		setupLogging()
+	}
 	printDoxInfo()
 	handleSignals()
 	influxClient := getInfluxDBClient()
