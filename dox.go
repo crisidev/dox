@@ -140,13 +140,13 @@ func routinesDown() {
 }
 
 func routineDown() {
-	routineNum -= 1
+	routineNum--
 	doxWg.Done()
 	log.Printf("routine stopped, %d to go", routineNum)
 }
 
 func routineUp() {
-	routineNum += 1
+	routineNum++
 	doxWg.Add(1)
 }
 
