@@ -33,6 +33,8 @@ var (
 	config          = readDoxConfig("config.json")
 )
 
+// DoxConfig contains the configuration values that are loaded
+// from the configuration file at program startup
 type DoxConfig struct {
 	InfluxHost           string
 	InfluxDb             string
@@ -44,10 +46,15 @@ type DoxConfig struct {
 	DockerPath           map[string]string
 }
 
+// DoxContainer holds the channel that delivers the stats and
+// the container object itself
 type DoxContainer struct {
 	statChan  chan *docker.Stats
 	container docker.APIContainers
 }
+
+// DoxContainers maps from the container name to the
+// DoxContainer struct
 type DoxContainers map[string]*DoxContainer
 
 // Init functions
