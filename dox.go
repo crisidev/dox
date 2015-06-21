@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	APP_NAME    = "dox"
-	APP_VERSION = "2.0"
-	APP_AUTHOR  = "bigo@crisidev.org"
-	APP_SITE    = "https://github.com/crisidev/dox"
+	AppName    = "dox"
+	AppVersion = "2.0"
+	AppAuthor  = "bigo@crisidev.org"
+	AppSite    = "https://github.com/crisidev/dox"
 )
 
 var (
@@ -86,7 +86,7 @@ func p(s interface{}) {
 }
 
 func printDoxInfo() {
-	fmt.Printf("%s v%s, docker: %s, influxdb: %s\n", APP_NAME, APP_VERSION, config.DockerHost, config.InfluxHost)
+	fmt.Printf("%s v%s, docker: %s, influxdb: %s\n", AppName, AppVersion, config.DockerHost, config.InfluxHost)
 }
 
 func sliceContains(slice []string, element string) bool {
@@ -164,6 +164,6 @@ func main() {
 	influxClient := getInfluxDBClient()
 	runDockerStatCollector(influxClient)
 	doxWg.Wait()
-	log.Printf("%s stopped", APP_NAME)
+	log.Printf("%s stopped", AppName)
 	os.Exit(0)
 }
