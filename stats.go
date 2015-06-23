@@ -13,7 +13,7 @@ import (
 func addColumnValueToPoint(column string, value interface{}, index int, point *influx.Series) int {
 	point.Columns[index] = column
 	point.Points[0][index] = value
-	index += 1
+	index++
 	return index
 }
 

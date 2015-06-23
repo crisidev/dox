@@ -26,7 +26,7 @@ func removeDoxContainer(id string) {
 }
 
 func cleanupDoxContainer(containers []docker.APIContainers, influxClient *influx.Client) {
-	for id, _ := range doxContainers {
+	for id := range doxContainers {
 		if isContainerInAPIContainers(containers, id) == false {
 			log.Printf("stopping monitoring for container %s, corresponding series will be deleted in 60 minutes", id)
 			go dropContainerSeries(influxClient, stripChars(doxContainers[id].container.Names[0], "/"))

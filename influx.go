@@ -68,7 +68,7 @@ func pingInfluxDB(influxClient *influx.Client) {
 		if err != nil {
 			log.Printf("error ping InfluxDB, retry in one minute, avaliable retries %d", retryCount)
 			log.Println(err)
-			retryCount -= 1
+			retryCount--
 		} else {
 			if debugFlag == true {
 				log.Println("ping ok, influxClient is alive and pushing")

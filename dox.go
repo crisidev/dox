@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	APP_NAME    = "dox"
-	APP_VERSION = "2.0"
-	APP_AUTHOR  = "bigo@crisidev.org"
-	APP_SITE    = "https://github.com/crisidev/dox"
+	appName    = "dox"
+	appVersion = "2.0"
+	appAuthor  = "bigo@crisidev.org"
+	appSite    = "https://github.com/crisidev/dox"
 )
 
 var (
@@ -33,6 +33,8 @@ var (
 	config          = readDoxConfig("config.json")
 )
 
+// DoxConfig contains the configuration values that are loaded
+// from the configuration file at program startup
 type DoxConfig struct {
 	InfluxHost           string
 	InfluxDb             string
@@ -44,10 +46,15 @@ type DoxConfig struct {
 	DockerPath           map[string]string
 }
 
+// DoxContainer holds the channel that delivers the stats and
+// the container object itself
 type DoxContainer struct {
 	statChan  chan *docker.Stats
 	container docker.APIContainers
 }
+
+// DoxContainers maps from the container name to the
+// DoxContainer struct
 type DoxContainers map[string]*DoxContainer
 
 // Init functions
@@ -86,7 +93,7 @@ func p(s interface{}) {
 }
 
 func printDoxInfo() {
-	fmt.Printf("%s v%s, docker: %s, influxdb: %s\n", APP_NAME, APP_VERSION, config.DockerHost, config.InfluxHost)
+	fmt.Printf("%s v%s, docker: %s, influxdb: %s\n", appName, appVersion, config.DockerHost, config.InfluxHost)
 }
 
 func sliceContains(slice []string, element string) bool {
@@ -133,13 +140,13 @@ func routinesDown() {
 }
 
 func routineDown() {
-	routineNum -= 1
+	routineNum--
 	doxWg.Done()
 	log.Printf("routine stopped, %d to go", routineNum)
 }
 
 func routineUp() {
-	routineNum += 1
+	routineNum++
 	doxWg.Add(1)
 }
 
@@ -164,6 +171,6 @@ func main() {
 	influxClient := getInfluxDBClient()
 	runDockerStatCollector(influxClient)
 	doxWg.Wait()
-	log.Printf("%s stopped", APP_NAME)
+	log.Printf("%s stopped", appName)
 	os.Exit(0)
 }
